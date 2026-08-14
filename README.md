@@ -21,11 +21,63 @@ python conjure.py
 ```
 
 That's it — no dependencies to install for normal use. A window titled
-**"Conjure — WoW 3.3.5a Model Porting"** opens with four tabs.
+**"Conjure — WoW 3.3.5a Model Porting"** opens with five tabs: a guided walkthrough plus four
+manual/advanced tabs.
 
-## The four tabs
+## Port a Model (Guided) — start here
 
-### 1. Inspect M2 (read-only)
+This is the default tab, and the one most people want. It walks a model through six numbered
+stages in order — you can't skip ahead, and each stage validates before the next one unlocks. A
+persistent checklist down the left shows ✓ / ✗ / — / → for every stage so you always know where
+you are. For a correctly-converted model, one pass through it produces ready-to-pack files with
+no guesswork. For a model that **isn't** ready, the wizard halts and tells you exactly what to do
+about it instead of quietly producing something broken.
+
+**Conjure does the deterministic binary work — inspecting, baking, writing DBC rows, and
+generating exact SQL. It does NOT convert models (that's MultiConverter, a separate tool) and it
+cannot merge an un-merged multi-LOD export or convert chunked animations.** When the wizard hits
+one of those states, it doesn't just show an error: it opens a "How to fix this" panel with
+numbered steps for the external tool you need, a **Re-check model** button so you can convert →
+re-check → convert without restarting the wizard, and (for the multi-LOD case only) an explicit,
+clearly-labelled "I understand the risk, continue anyway" override for advanced users.
+
+- **Stage 0 — Model + folder name.** Browse to the converted `.m2` and give it the in-game model
+  folder name (pre-filled from the filename). Conjure scans the folder for sibling `.skin`,
+  `.anim`, and `.blp` files and lists what it found.
+- **Stage 1 — Readiness check (the gate).** Runs the full inspection: format (`MD20`/`MD21`),
+  version, bone count, and the **multi-LOD vertex check** — if a `<name>00.skin` sits next to the
+  model and its vertex span is much smaller than the M2's vertex count, that's an un-merged
+  multi-LOD export, and the wizard halts with the guided-fix panel described above. It also lists
+  any external `.anim` files the model needs. Only a passing (or explicitly overridden) check
+  unlocks Stage 2.
+- **Stage 2 — Textures.** Conjure reads the texture slots and picks the method for you: **type 0**
+  slots get baked (edit one path per slot, with a Swap-slots helper for reversed skin/armor
+  order); **type 11/12/13** slots mean this model is fed via DBC TextureVariations instead, so it
+  collects the three variation names + a CreatureGeosetData integer for Stage 3; a **mixed** model
+  gets both.
+- **Stage 3 — DBC rows.** Loads `CreatureModelData.dbc` + `CreatureDisplayInfo.dbc`, auto-picks the
+  next free IDs (never colliding with an existing row), and writes both edited DBCs — wiring in
+  the TextureVariations from Stage 2 if this is a DBC-fed model.
+- **Stage 4 — Repoint SQL.** Generates copy-paste-ready MySQL: a name-search statement (with
+  apostrophes in creature names escaped correctly), then — once you paste back the creature
+  entry/entries — the sharing-check and repoint statements with the real entries and the real new
+  DisplayID substituted in. Includes a strong warning about never editing a shared display.
+- **Stage 5 — READY TO PACK.** A single consolidated checklist: the exact files to pack and where,
+  a reminder to place both edited DBCs in **both** the client patch and the server `dbc\` folder,
+  the SQL to run, and the post-patch steps (clear WDB cache, restart worldserver). Everything —
+  the baked `.m2`, the edited DBCs, a `PACKING.txt` with this whole checklist, and a `REPOINT.sql`
+  with the final SQL — lands together in one `conjure_output/` folder, with an "Open output
+  folder" button.
+
+Conjure remembers your last-used file paths and ID floors between runs (in a small
+`conjure_config.json` next to the app), so repeated ports don't mean re-browsing everything.
+
+## The manual/advanced tabs
+
+These are the same tabs from Conjure's original release — useful for one-off edits, or when you
+want to do a step in isolation instead of running the whole wizard.
+
+### Inspect M2 (read-only)
 Load an `.m2` and get a plain report: magic/version (flagged if not `MD20` 264), bone count
 (flagged if over the WotLK 256 per-draw bone ceiling), vertex count, view count, and a
 per-slot texture breakdown (index, type, and a plain-English label — e.g. "type 0 = baked
@@ -36,8 +88,10 @@ needed). If a `<name>00.skin` file sits next to the `.m2`, Conjure compares the 
 count against the skin's actual vertex span and warns if the M2 looks like an un-merged
 multi-LOD export that needs re-converting rather than packing.
 
-### 2. Bake Textures
-Load an `.m2`; Conjure pre-fills a row per texture slot showing its current type and name.
+### Bake Textures (manual)
+Use this when textures are baked INTO the `.m2` — most of your own ports. (For community/
+downloaded models whose instructions say "set TextureVariation1/2/3", use the TextureVariations
+tab instead.) Load an `.m2`; Conjure pre-fills a row per texture slot showing its current type and name.
 Give it a BLP folder name once (e.g. `thrallshadowlands`) and type a filename per slot — each
 row is a plain editable text field, defaulting to `Creature\<folder>\<filename>.blp`. Clicking
 **Bake**:
@@ -49,7 +103,7 @@ row is a plain editable text field, defaulting to `Creature\<folder>\<filename>.
 - A **Swap slots** helper lets you swap two rows' text (for when skin/armor slot order comes
   out reversed) without retyping anything.
 
-### 3. Build DBC Rows
+### Build DBC Rows (manual)
 Load `CreatureModelData.dbc` and `CreatureDisplayInfo.dbc`, enter the model's folder+name
 (builds `ModelName` as `Creature\<name>\<name>.mdx`), and optionally override the DisplayID/
 ModelData ID floors (defaults `90013` / `91014`). Clicking **Build**:
@@ -65,9 +119,10 @@ ModelData ID floors (defaults `90013` / `91014`). Clicking **Build**:
   UPDATE creature_template_model SET CreatureDisplayID=<X> WHERE CreatureID=<entry>;
   ```
 
-### 4. Set TextureVariations (community-port mode)
-For when you're wiring up an already-existing DisplayID to community-made texture variations
-instead of baking a texture into the M2. Load `CreatureDisplayInfo.dbc`, pick a DisplayID that
+### Set TextureVariations (manual / community ports)
+Use this when textures are fed via the DBC instead of baked into the `.m2` — typically a
+community/downloaded model whose instructions say "set TextureVariation1/2/3", on a DisplayID
+that already exists. Load `CreatureDisplayInfo.dbc`, pick a DisplayID that
 already exists in the file, enter the three `TextureVariation` names (bare names, e.g.
 `sl_skin`, `sl_base_armor`, `sl_cloak`) and a `CreatureGeosetData` integer. Clicking **Apply**
 appends the three strings to the string block, points fields `[6]`/`[7]`/`[8]` at them, sets
@@ -100,10 +155,11 @@ The resulting `conjure.exe` will be in `dist/`.
 ## Running the self-tests
 
 Conjure ships with self-tests that build fake `.m2`/`.dbc`/`.skin` files in memory/temp
-directories and verify the binary read/write logic — no real game files needed:
+directories and verify the binary read/write logic and the guided wizard's decision-making
+(the multi-LOD gate, texture routing, SQL substitution) — no real game files needed:
 
 ```
-python -m unittest tests.test_conjure -v
+python -m unittest tests.test_conjure tests.test_wizard -v
 ```
 
 ## Suggested GitHub "About" description

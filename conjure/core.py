@@ -179,6 +179,10 @@ def build_dbc_rows(
     display_floor: int = DEFAULT_DISPLAY_ID_FLOOR,
     modeldata_floor: int = DEFAULT_MODEL_DATA_FLOOR,
     creature_entry: str = "<entry>",
+    tex_variation_1: str = "",
+    tex_variation_2: str = "",
+    tex_variation_3: str = "",
+    creature_geoset_data: int = 0,
 ) -> dict:
     if not model_name or any(c in model_name for c in '\\/:*?"<>|'):
         raise ConjureError(f"'{model_name}' is not a valid bare model folder/name (no path separators).")
@@ -234,15 +238,15 @@ def build_dbc_rows(
         0,            # [3] ExtendedDisplayInfoID
         F(1.0),       # [4] CreatureModelScale
         255,          # [5] CreatureModelAlpha
-        0,            # [6] TextureVariation1
-        0,            # [7] TextureVariation2
-        0,            # [8] TextureVariation3
+        di.add_string(tex_variation_1) if tex_variation_1 else 0,  # [6] TextureVariation1
+        di.add_string(tex_variation_2) if tex_variation_2 else 0,  # [7] TextureVariation2
+        di.add_string(tex_variation_3) if tex_variation_3 else 0,  # [8] TextureVariation3
         0,            # [9] PortraitTextureName
         1,            # [10] BloodLevel
         0,            # [11] BloodID
         0,            # [12] NPCSoundID
         0,            # [13] ParticleColorID
-        0,            # [14] CreatureGeosetData
+        creature_geoset_data & 0xFFFFFFFF,  # [14] CreatureGeosetData
         0,            # [15] ObjectEffectPackageID
     ]
     di.add_record(di_record)

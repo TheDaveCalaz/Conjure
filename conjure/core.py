@@ -11,6 +11,7 @@ Rules enforced everywhere in this module:
 """
 
 import os
+import re
 import shutil
 
 from .dbc import DBCFile, float_to_u32, verify_dbc
@@ -126,6 +127,26 @@ def inspect_m2(m2_path: str) -> dict:
 # Tab 2 — Bake Textures
 # --------------------------------------------------------------------------
 
+_DRIVE_LETTER_RE = re.compile(r"^[A-Za-z]:[\\/]")
+_UNC_RE = re.compile(r"^(\\\\|//)")
+
+
+def _baked_path_problem(path: str) -> str:
+    """Return a description of what's wrong with a path to bake into the M2,
+    or "" if it's fine. Catches the single most common way baking goes wrong:
+    pasting the .blp's location on YOUR computer (e.g. a wow.export output
+    folder) instead of the in-game path the client will actually look up."""
+    if _DRIVE_LETTER_RE.match(path):
+        return "looks like a location on YOUR computer (a Windows drive path), not an in-game path"
+    if _UNC_RE.match(path):
+        return "looks like a network/UNC path on your computer, not an in-game path"
+    if path.startswith("/"):
+        return "looks like an absolute filesystem path, not an in-game path"
+    if "/" in path:
+        return "uses forward slashes — WoW in-game paths use backslashes"
+    return ""
+
+
 def bake_textures(m2_path: str, slot_paths: dict, output_dir: str = None) -> dict:
     """slot_paths: {texture_slot_index: baked_path_string}"""
     m2 = M2File.load(m2_path)
@@ -133,6 +154,21 @@ def bake_textures(m2_path: str, slot_paths: dict, output_dir: str = None) -> dic
     for idx in slot_paths:
         if idx < 0 or idx >= n:
             raise ConjureError(f"texture slot {idx} out of range (this model has {n} slots).")
+
+    problems = [
+        f"  slot {idx}: '{slot_paths[idx]}' — {reason}"
+        for idx in sorted(slot_paths)
+        for reason in [_baked_path_problem(slot_paths[idx])]
+        if reason
+    ]
+    if problems:
+        raise ConjureError(
+            "Refusing to bake — these paths don't look like in-game paths:\n"
+            + "\n".join(problems)
+            + "\n\nBake the IN-GAME path the client will look up, e.g. Creature\\<foldername>\\<filename>.blp "
+            "— the same path the .blp file will have INSIDE patch-c.mpq once you pack it, not wherever the "
+            "source file currently sits on your computer (e.g. your wow.export output folder)."
+        )
 
     output_dir = output_dir or default_output_dir(m2_path)
     os.makedirs(output_dir, exist_ok=True)
@@ -308,6 +344,11 @@ def set_texture_variations(
             f"{display_info_path}: expected {DISPLAY_INFO_FIELD_COUNT} fields for "
             f"CreatureDisplayInfo.dbc, found {di.field_count}. Wrong file or wrong client build?"
         )
+    for label, value in [("TextureVariation1", tex1), ("TextureVariation2", tex2), ("TextureVariation3", tex3)]:
+        if value and any(c in value for c in "\\/:"):
+            raise ConjureError(
+                f"{label} should be a bare name (e.g. sl_skin), not a path — got '{value}'."
+            )
 
     idx = None
     for i, rec in enumerate(di.records):

@@ -336,6 +336,16 @@ class GuidedTab(ttk.Frame):
                 text="This model bakes texture paths INTO the .m2 (most of your own ports use this).",
                 wraplength=760,
             ).pack(anchor="w", pady=(4, 2))
+            ttk.Label(
+                f,
+                text=(
+                    "⚠ Each path below must be the IN-GAME path — the same path the .blp will have "
+                    "INSIDE patch-c.mpq (e.g. Creature\\velen2\\body.blp). It is NOT the file's current "
+                    "location on your PC — do not paste something like "
+                    "C:\\Users\\You\\wow.export\\creature\\velen2\\body.blp here, Conjure will reject it."
+                ),
+                wraplength=760, foreground="#b00020",
+            ).pack(anchor="w", pady=(0, 6))
             for t in routing["bake_slots"]:
                 row = ttk.Frame(f)
                 row.pack(fill="x", pady=1)
@@ -752,6 +762,16 @@ class BakeTab(ttk.Frame):
             self,
             text="Edit the path for each slot you want to bake. Leave blank to leave a slot untouched.",
         ).pack(fill="x", pady=(8, 2))
+        ttk.Label(
+            self,
+            text=(
+                "⚠ Each path must be the IN-GAME path — the same path the .blp will have INSIDE "
+                "patch-c.mpq (e.g. Creature\\velen2\\body.blp). It is NOT the file's current location on "
+                "your PC — do not paste something like C:\\Users\\You\\wow.export\\creature\\velen2\\body.blp "
+                "here, Conjure will reject it."
+            ),
+            wraplength=820, foreground="#b00020",
+        ).pack(anchor="w", pady=(0, 4))
 
         self.slots_frame = ttk.Frame(self)
         self.slots_frame.pack(fill="both", expand=True)

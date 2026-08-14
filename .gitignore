@@ -4,3 +4,5 @@ build/
 dist/
 *.spec
 conjure_output/
+conjure_config.json
+*.exe

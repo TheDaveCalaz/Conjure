@@ -1116,9 +1116,30 @@ class TexVarTab(ttk.Frame):
 # Main window
 # ---------------------------------------------------------------------------
 
+def _set_app_icon(root):
+    """Best-effort window icon for a source run. The packaged .exe gets its icon
+    baked in at PyInstaller build time (--icon=assets/icon.ico); this only covers
+    `python conjure.py` and never raises if the assets folder isn't there."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    ico_path = os.path.join(base_dir, "assets", "icon.ico")
+    png_path = os.path.join(base_dir, "assets", "icon.png")
+    if sys.platform == "win32" and os.path.exists(ico_path):
+        try:
+            root.iconbitmap(ico_path)
+            return
+        except tk.TclError:
+            pass
+    if os.path.exists(png_path):
+        try:
+            root.iconphoto(True, tk.PhotoImage(file=png_path))
+        except tk.TclError:
+            pass
+
+
 def main():
     root = tk.Tk()
     root.title(WINDOW_TITLE)
+    _set_app_icon(root)
     root.geometry("980x760")
 
     notebook = ttk.Notebook(root)

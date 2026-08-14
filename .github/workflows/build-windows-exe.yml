@@ -33,7 +33,7 @@ jobs:
       - name: Install PyInstaller
         run: pip install pyinstaller
       - name: Build conjure.exe
-        run: pyinstaller --onefile --noconsole conjure.py
+        run: pyinstaller --onefile --noconsole --icon=assets/icon.ico conjure.py
       - name: Publish latest build
         uses: softprops/action-gh-release@v2
         with:

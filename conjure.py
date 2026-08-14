@@ -98,6 +98,8 @@ class GuidedTab(ttk.Frame):
         self.dbc_result = None
         self.sql_block = None
         self._lod_override_var = tk.BooleanVar(value=False)
+        self._bake_path_cache = {}  # {slot_index: last-typed path}, survives Stage 2 re-renders
+        self._texvar_cache = {"tex1": "", "tex2": "", "tex3": "", "geoset": "0"}
 
         header = ttk.Label(
             self,
@@ -324,6 +326,23 @@ class GuidedTab(ttk.Frame):
         self.texture_routing = routing
         self.bake_entries = []
 
+        # Stage 2 always re-inspects the ORIGINAL .m2, so on a re-visit (Back, or
+        # after a bake) it has no idea what you typed last time or that a bake
+        # already happened. Prefer, in order: the value actually verified on disk
+        # by the last bake, then whatever you last typed, then the generic default.
+        already_baked = {t["index"]: t["name"] for t in (self.bake_result or {}).get("verification", [])} \
+            if self.bake_result else {}
+
+        if already_baked:
+            ttk.Label(
+                f,
+                text=(
+                    f"Already baked to {self.bake_result['output_path']} — the values below are what "
+                    "was actually verified on disk. Edit and hit Next again to re-bake."
+                ),
+                wraplength=760, font=("", 9, "italic"),
+            ).pack(anchor="w", pady=(0, 6))
+
         if routing["mode"] == "none":
             ttk.Label(
                 f, text="No bakeable or DBC-fed texture slots were found on this model — nothing to do here.",
@@ -349,16 +368,23 @@ class GuidedTab(ttk.Frame):
             for t in routing["bake_slots"]:
                 row = ttk.Frame(f)
                 row.pack(fill="x", pady=1)
-                ttk.Label(row, text=f"[{t['index']}] {t['name'] or '(empty)'}", width=26).pack(side="left")
+                slot_label = t["name"] if t["name"] != "(empty / DBC-fed)" else "(empty)"
+                ttk.Label(row, text=f"[{t['index']}] {slot_label}", width=26).pack(side="left")
                 e = ttk.Entry(row, width=48)
-                e.insert(0, routing["default_paths"].get(t["index"], ""))
+                prefill = (
+                    already_baked.get(t["index"])
+                    or self._bake_path_cache.get(t["index"])
+                    or routing["default_paths"].get(t["index"], "")
+                )
+                e.insert(0, prefill)
                 e.pack(side="left", padx=5, fill="x", expand=True)
                 self.bake_entries.append((t["index"], e))
             ttk.Label(
                 f,
                 text=(
-                    "Flat white in game = a path is wrong/blank. Scrambled textures = slot order is "
-                    "wrong — use Swap and re-bake."
+                    "Flat white in game = a path is wrong/blank (or the file doesn't exist inside "
+                    "patch-c.mpq at that path yet, or the .blp itself is unreadable). Scrambled "
+                    "textures = slot order is wrong — use Swap and re-bake."
                 ),
                 wraplength=760, font=("", 9, "italic"),
             ).pack(anchor="w", pady=(4, 4))
@@ -372,10 +398,10 @@ class GuidedTab(ttk.Frame):
             self.swap_b.pack(side="left", padx=3)
             ttk.Button(swap_row, text="Swap", command=self._stage2_swap).pack(side="left", padx=5)
 
-        self.tex1_var = tk.StringVar()
-        self.tex2_var = tk.StringVar()
-        self.tex3_var = tk.StringVar()
-        self.geoset_var = tk.StringVar(value="0")
+        self.tex1_var = tk.StringVar(value=self._texvar_cache.get("tex1", ""))
+        self.tex2_var = tk.StringVar(value=self._texvar_cache.get("tex2", ""))
+        self.tex3_var = tk.StringVar(value=self._texvar_cache.get("tex3", ""))
+        self.geoset_var = tk.StringVar(value=self._texvar_cache.get("geoset", "0"))
         if routing["mode"] in ("texvar", "mixed"):
             ttk.Label(
                 f, text="This model is fed via DBC TextureVariations (community/downloaded port).",
@@ -394,8 +420,25 @@ class GuidedTab(ttk.Frame):
 
         nav = ttk.Frame(f)
         nav.pack(fill="x", pady=8)
-        ttk.Button(nav, text="← Back", command=lambda: self._advance_to(1, rerender_only=True)).pack(side="left")
+        ttk.Button(nav, text="← Back", command=self._stage2_back).pack(side="left")
         ttk.Button(nav, text="Next →", command=self._stage2_next).pack(side="right")
+
+    def _stage2_snapshot(self):
+        """Remember whatever's currently typed so it survives a Back/re-render,
+        even if the user never got as far as clicking Next."""
+        for idx, e in getattr(self, "bake_entries", []):
+            self._bake_path_cache[idx] = e.get()
+        if hasattr(self, "tex1_var"):
+            self._texvar_cache = {
+                "tex1": self.tex1_var.get(),
+                "tex2": self.tex2_var.get(),
+                "tex3": self.tex3_var.get(),
+                "geoset": self.geoset_var.get(),
+            }
+
+    def _stage2_back(self):
+        self._stage2_snapshot()
+        self._advance_to(1, rerender_only=True)
 
     def _stage2_swap(self):
         try:
@@ -414,6 +457,7 @@ class GuidedTab(ttk.Frame):
         by_idx[b].insert(0, va)
 
     def _stage2_next(self):
+        self._stage2_snapshot()
         routing = self.texture_routing
         bake_result = None
         if routing["mode"] in ("bake", "mixed"):

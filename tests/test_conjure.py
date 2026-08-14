@@ -252,6 +252,56 @@ class TestM2(unittest.TestCase):
             self.assertIsNotNone(report["lod_warning"])
 
 
+class TestBakePathValidation(unittest.TestCase):
+    """Regression coverage for baking a path to the .blp's location on the
+    user's own computer (e.g. their wow.export output folder) instead of the
+    in-game path the client actually looks up — this always renders flat
+    white in-game, so Conjure must refuse it outright."""
+
+    def _bake(self, tmp, slot_paths):
+        path = os.path.join(tmp, "model.m2")
+        with open(path, "wb") as f:
+            f.write(build_fake_m2())
+        return bake_textures(path, slot_paths)
+
+    def test_rejects_windows_drive_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ConjureError) as ctx:
+                self._bake(tmp, {0: r"C:\Users\User\wow.export\creature\velen2\velen1.blp"})
+            self.assertIn("YOUR computer", str(ctx.exception))
+
+    def test_rejects_unc_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ConjureError):
+                self._bake(tmp, {0: r"\\fileserver\share\creature\velen2\velen1.blp"})
+
+    def test_rejects_leading_unix_slash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ConjureError):
+                self._bake(tmp, {0: "/home/user/wow.export/creature/velen2/velen1.blp"})
+
+    def test_rejects_forward_slashes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ConjureError):
+                self._bake(tmp, {0: "Creature/velen2/velen1.blp"})
+
+    def test_error_lists_every_bad_slot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ConjureError) as ctx:
+                self._bake(tmp, {
+                    0: r"C:\Users\User\wow.export\creature\velen2\velen1.blp",
+                    1: r"C:\Users\User\wow.export\creature\velen2\velen2.blp",
+                })
+            message = str(ctx.exception)
+            self.assertIn("slot 0", message)
+            self.assertIn("slot 1", message)
+
+    def test_accepts_valid_in_game_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._bake(tmp, {0: r"Creature\velen2\velen1.blp"})
+            self.assertTrue(os.path.exists(result["output_path"]))
+
+
 class TestSkin(unittest.TestCase):
     def test_vertex_span(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -342,6 +392,13 @@ class TestSetTextureVariations(unittest.TestCase):
             build_fake_creature_display_info().save(di_path)
             with self.assertRaises(ConjureError):
                 set_texture_variations(di_path, 12345, "a", "b", "c", 0)
+
+    def test_rejects_path_like_variation_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            di_path = os.path.join(tmp, "CreatureDisplayInfo.dbc")
+            build_fake_creature_display_info().save(di_path)
+            with self.assertRaises(ConjureError):
+                set_texture_variations(di_path, 80000, r"C:\Users\User\wow.export\sl_skin.blp", "", "", 0)
 
 
 if __name__ == "__main__":

@@ -157,7 +157,7 @@ this is only for building your own copy, e.g. to test local changes:
 
 ```
 pip install pyinstaller
-pyinstaller --onefile --noconsole conjure.py
+pyinstaller --onefile --noconsole --icon=assets/icon.ico conjure.py
 ```
 
 The resulting `conjure.exe` will be in `dist/`. Don't commit it to the repo — it goes stale the

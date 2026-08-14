@@ -8,7 +8,14 @@ creature models. It automates binary edits to `.m2` model files and `.dbc` datab
 you'd otherwise do by hand in a hex editor. It's pure, deterministic file manipulation — no
 machine learning, no network access, nothing leaves your machine.
 
-## Requirements
+## Windows: just want a double-clickable app?
+
+Grab the always-up-to-date prebuilt `conjure.exe` from the
+**[latest release](../../releases/latest)** — no Python install needed. It's rebuilt
+automatically by GitHub Actions every time `main` changes, so it never goes stale the way a
+manually-committed `.exe` would. Download `conjure.exe` from that page and double-click it.
+
+## Requirements (running from source)
 
 - Python 3.7+ (Windows/macOS/Linux). Conjure's GUI uses `tkinter`, which ships with the standard
   Python installer on Windows and macOS.
@@ -143,14 +150,19 @@ shows the re-parsed, resolved values.
 
 Output files land in a `conjure_output/` folder next to your input files.
 
-## Building a Windows .exe
+## Building a Windows .exe yourself
+
+Most people should just grab the [latest release](../../releases/latest) instead (see above) —
+this is only for building your own copy, e.g. to test local changes:
 
 ```
 pip install pyinstaller
 pyinstaller --onefile --noconsole conjure.py
 ```
 
-The resulting `conjure.exe` will be in `dist/`.
+The resulting `conjure.exe` will be in `dist/`. Don't commit it to the repo — it goes stale the
+moment `conjure.py` changes, which is exactly what the automated release build (see above) exists
+to avoid.
 
 ## Running the self-tests
 

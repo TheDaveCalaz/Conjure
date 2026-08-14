@@ -1,0 +1,48 @@
+name: Build Windows exe
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run self-tests
+        run: python -m unittest tests.test_conjure tests.test_wizard -v
+
+  build-windows:
+    # Only build+publish on an actual push to main (or a manual trigger) —
+    # never on a PR branch, so pull requests don't spam the release.
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+      - name: Build conjure.exe
+        run: pyinstaller --onefile --noconsole conjure.py
+      - name: Publish latest build
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-build
+          name: Latest build
+          make_latest: true
+          files: dist/conjure.exe
+          body: |
+            Automatically built from the latest `main` (commit ${{ github.sha }}).
+            This is not a versioned release — it always reflects whatever is
+            currently on `main`. Download `conjure.exe` below and run it directly;
+            no Python install needed.
